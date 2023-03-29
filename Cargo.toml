@@ -1,12 +1,18 @@
 [package]
-name = "pay_the_piper"
+name = "hydra_crank"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-solana-client = "1.14.13"
-solana-sdk = "1.14.13"
-spl-token = "3.5.0"
-solana-account-decoder = "1.14.13"
+solana-client = "1.10.29"
+solana-sdk = "1.10.29"
+solana-account-decoder = "1.10.29"
+mpl-hydra = "0.4.0"
+anchor-lang = "0.25.0"
+anchor-spl = "0.25.0"
+spl-token = {version="3.3.0", features = [ "no-entrypoint" ]}
+spl-associated-token-account = "1.0.5"
+anchor-client = "0.25.0"
+anyhow = "1.0.70"
