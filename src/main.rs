@@ -9,7 +9,7 @@ use mpl_hydra::state::{
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     rpc_client::RpcClient,
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
 };
 use solana_sdk::{
@@ -230,7 +230,7 @@ fn top_down(connection: &RpcClient, program: &Program, keypair: &Keypair) {
                     &mpl_hydra::ID,
                 );
 
-                let member_mint_ata = match fanout.membership_mint {
+                let (member_mint_ata, member_stake_ata) = match fanout.membership_mint {
                     Some(mint) => {
                         let ata = get_associated_token_address(&voucher.membership_key, &mint);
                         match connection.get_account(&ata) {
@@ -254,9 +254,13 @@ fn top_down(connection: &RpcClient, program: &Program, keypair: &Keypair) {
                                 println!("Create Member Mint ATA: {:?}", err);
                             }
                         }
-                        Some(ata)
+                        let stake_ata = get_associated_token_address(&voucher_account.0, &mint);
+                        (Some(ata), Some(stake_ata))
                     }
-                    None => None,
+                    None => {
+                        println!("Fanout has no membership Mint");
+                        (None, None)
+                    }
                 };
 
                 let fanout_mint_member_ata =
@@ -273,6 +277,7 @@ fn top_down(connection: &RpcClient, program: &Program, keypair: &Keypair) {
                     &mint_voucher_address.0,
                     &fanout_mint_member_ata,
                     &member_mint_ata,
+                    &member_stake_ata,
                 ) {
                     Ok(signature) => {
                         println!("Signature: {:?}", signature);
@@ -298,6 +303,7 @@ fn build(
     mint_voucher_address: &Pubkey,
     fanout_mint_member_ata: &Pubkey,
     member_mint_ata: &Option<Pubkey>,
+    member_stake_ata: &Option<Pubkey>,
 ) -> Result<Signature> {
     let builder = match fanout.membership_model {
         MembershipModel::Wallet => program
@@ -336,7 +342,7 @@ fn build(
                 rent: rent::ID,
                 token_program: spl_token::ID,
                 membership_mint: fanout.membership_mint.unwrap(),
-                member_stake_account: member_mint_ata.unwrap(),
+                member_stake_account: member_stake_ata.unwrap_or_default(),
             })
             .args(mpl_hydra::instruction::ProcessDistributeToken {
                 distribute_for_mint: true,
@@ -363,7 +369,11 @@ fn build(
                 distribute_for_mint: true,
             }),
     };
-    match builder.send() {
+    let ix = builder.instructions();
+    match builder.send_with_spinner_and_config(RpcSendTransactionConfig {
+        skip_preflight: true,
+        ..RpcSendTransactionConfig::default()
+    }) {
         Ok(signature) => {
             println!("Signature: {:?}", signature);
             Ok(signature)
